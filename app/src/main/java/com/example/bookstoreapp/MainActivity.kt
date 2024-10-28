@@ -6,8 +6,12 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.ActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -33,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import coil3.Uri
 import coil3.compose.AsyncImage
 import com.example.bookstoreapp.data.Book
 import com.example.bookstoreapp.ui.theme.BookStoreAppTheme
@@ -46,7 +51,26 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MainScreen(name = "test", modifier = Modifier)
+            val fs = Firebase.firestore
+            val storage = Firebase.storage.reference.child("images")
+        //  Get media file
+            val launcher = rememberLauncherForActivityResult(contract = ActivityResultContracts.PickVisualMedia()) {
+                uri ->
+                if (uri == null) return@rememberLauncherForActivityResult
+                val task = storage.child("test.jpg").putBytes(
+                    bitmapToByteArray(this, uri)
+                )
+                task.addOnSuccessListener {
+                        uploadTask -> uploadTask.metadata?.reference?.downloadUrl?.addOnCompleteListener{
+                        uriTask -> saveBook(fs, uriTask.result.toString())
+                }
+
+                }
+            }
+//            MainScreen(name = "test", modifier = Modifier)
+            MainScreen {
+                launcher.launch(PickVisualMediaRequest(mediaType = ActivityResultContracts.PickVisualMedia.ImageOnly))
+            }
         }
 
 
@@ -56,7 +80,9 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainScreen(name: String, modifier: Modifier = Modifier) {
+//fun MainScreen(name: String, modifier: Modifier = Modifier, onClick: () -> Unit)
+fun MainScreen(onClick: () -> Unit)
+{
 
     val context = LocalContext.current
     val fs = Firebase.firestore
@@ -108,16 +134,16 @@ fun MainScreen(name: String, modifier: Modifier = Modifier) {
             .fillMaxWidth()
             .padding(10.dp),
             onClick = {
-
-                val task = storage.child("cat.jpg").putBytes(
-                    bitmapToByteArray(context)
-                )
-                task.addOnSuccessListener {
-                    uploadTask -> uploadTask.metadata?.reference?.downloadUrl?.addOnCompleteListener{
-                        uriTask -> saveBook(fs, uriTask.result.toString())
-                    }
-
-                }
+                    onClick()
+//                val task = storage.child("cat.jpg").putBytes(
+//                    bitmapToByteArray(context)
+//                )
+//                task.addOnSuccessListener {
+//                    uploadTask -> uploadTask.metadata?.reference?.downloadUrl?.addOnCompleteListener{
+//                        uriTask -> saveBook(fs, uriTask.result.toString())
+//                    }
+//
+//                }
             }
         )
         {
@@ -129,9 +155,12 @@ fun MainScreen(name: String, modifier: Modifier = Modifier) {
 }
 
 
-private fun bitmapToByteArray(context: Context): ByteArray
+private fun bitmapToByteArray(context: Context, uri: android.net.Uri): ByteArray
 {
-    val bitmap = BitmapFactory.decodeResource(context.resources, R.drawable.cat)
+    val inputStream = context.contentResolver.openInputStream(uri)
+    val bitmap = BitmapFactory.decodeStream(inputStream)
+
+//    val bitmap = BitmapFactory.decodeResource(context.resources, R.drawable.cat)
     val baos = ByteArrayOutputStream()
     bitmap.compress(Bitmap.CompressFormat.JPEG, 50, baos)
     return baos.toByteArray()
